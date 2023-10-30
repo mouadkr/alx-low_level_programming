@@ -1,115 +1,103 @@
 #include "main.h"
 #include <stdio.h>
-#include <unistd.h>
+#include <stdlib.h>
+
+char *create_buffer(char *file);
+void close_file(int fd);
 
 /**
- * main - copies a file into another
- * @argc : no of cla
- * @argv: string of cla containg file names
- * Return: 0 on success
+ * create_buffer - This code allocates 1024 bytes for buffer.
+ * @file:  The file buffer is storing chars for.
+ *
+ * Return: The pointer to the newly-allocated buffer.
  */
+char *create_buffer(char *file)
+{
+	char *buffer;
 
+	buffer = malloc(sizeof(char) * 1024);
+
+	if (buffer == NULL)
+	{
+		dprintf(STDERR_FILENO,
+			"Error: Can't write to %s\n", file);
+		exit(99);
+	}
+
+	return (buffer);
+}
+
+/**
+ * close_file - This code closes the  file descriptors.
+ * @fd: File descriptor to be closed.
+ */
+void close_file(int fd)
+{
+	int tin;
+
+	tin = close(fd);
+
+	if (tin == -1)
+	{
+		dprintf(STDERR_FILENO, "Error: Can't close fd %d\n", fd);
+		exit(100);
+	}
+}
+
+/**
+ * main - This code copies contents of a file to another file.
+ * @argc: This is the  number of arguments supplied to program.
+ * @argv: This is an array of pointers to the arguments.
+ *
+ * Return: 0 as a success.
+ *
+ * Description: When the argument count is incorrect - exit code 97,
+ * When the file_from does not exist or can't be read - exit code 98,
+ * When the file_to cannot be created or written to - exit code 99,
+ * When the  file_to or file_from can't be closed - exit code 100.
+ */
 int main(int argc, char *argv[])
 {
-	int fdf, fdt, stat;
-	ssize_t len, rc, wc, buf_size;
-	char *buffer, *tmp;
+	int from, to, r, w;
+	char *buffer;
 
-	buf_size = 1024;
 	if (argc != 3)
-		err_check(-1, 97, NULL);
-	fdf = open(argv[1], O_RDONLY);
-	err_check(fdf, 98, argv[1]);
-	buffer = malloc(buf_size);
-	if (buffer == NULL)
-		return (1);
-	for (rc = 0; (len = read(fdf, &buffer[rc], 1024)) > 0;)
 	{
-		rc += len;
-		stat = close_buffer(len, fdf, 0, buffer);
-		err_check(stat, 98, argv[1]);
-		if (rc == buf_size)
-		{
-			buf_size *= 2;
-			tmp = realloc(buffer, buf_size);
-			if (tmp == NULL)
-			{
-				free(buffer);
-				return (1);
-			}
-			buffer = tmp;
-		}
+		dprintf(STDERR_FILENO, "Usage: cp file_from file_to\n");
+		exit(97);
 	}
-	buffer[rc] = '\0';
-	fdt = open(argv[2], O_WRONLY | O_CREAT | O_TRUNC, 0664);
-	stat = close_buffer(fdt, fdf, 0, buffer);
-	err_check(stat, 99, argv[2]);
-	wc = write(fdt, buffer, rc);
-	close_buffer(-1, fdf, fdt, buffer);
-	if (wc != rc)
-		err_check(-1, 99, argv[2]);
-	return (0);
-}
 
-/**
- * err_check - prints an error message
- * @status: checks if function should run
- * @err_flag: exit code
- * @s: string to print
- */
-void err_check(int status, int err_flag, char *s)
-{
-	if (status != -1)
-		return;
-	switch (err_flag)
-	{
-		case (97):
-			dprintf(STDERR_FILENO, "Usage: cp file_from file_to\n");
-			exit(97);
-		case (98):
-			dprintf(STDERR_FILENO, "Error: Can't read from file %s\n", s);
+	buffer = create_buffer(argv[2]);
+	from = open(argv[1], O_RDONLY);
+	r = read(from, buffer, 1024);
+	to = open(argv[2], O_CREAT | O_WRONLY | O_TRUNC, 0664);
+
+	do {
+		if (from == -1 || r == -1)
+		{
+			dprintf(STDERR_FILENO,
+				"Error: Can't read from file %s\n", argv[1]);
+			free(buffer);
 			exit(98);
-		case (99):
-			dprintf(STDERR_FILENO, "Error: Can't write to %s\n", s);
+		}
+
+		w = write(to, buffer, r);
+		if (to == -1 || w == -1)
+		{
+			dprintf(STDERR_FILENO,
+				"Error: Can't write to %s\n", argv[2]);
+			free(buffer);
 			exit(99);
-	}
-}
+		}
 
-/**
- * close_buffer - closes an fd and frees a buffer
- * @stat: checks if function should perform
- * @fd: file descriptor
- * @fd2: second file descriptor if necessary
- * @buffer: dynamic string
- * Return: exit on fail, -1 on close
- *
- * Returns 0 if it shouldn't close
- */
+		r = read(from, buffer, 1024);
+		to = open(argv[2], O_WRONLY | O_APPEND);
 
-int close_buffer(int stat, int fd, int fd2, char *buffer)
-{
-	int status;
+	} while (r > 0);
 
-	if (stat != -1)
-		return (0);
 	free(buffer);
-	if (fd != 0)
-	{
-		status = close(fd);
-		if (status == -1)
-		{
-			dprintf(STDERR_FILENO, "Error: Can't close fd %i\n", fd);
-			exit(100);
-		}
-	}
-	if (fd2 != 0)
-	{
-		status = close(fd2);
-		if (status == -1)
-		{
-			dprintf(STDERR_FILENO, "Error: Can't close fd %i\n", fd);
-			exit(100);
-		}
-	}
-	return (-1);
+	close_file(from);
+	close_file(to);
+
+	return (0);
 }
